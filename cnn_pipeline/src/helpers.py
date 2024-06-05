@@ -1,7 +1,11 @@
 import os
+import random
 import requests
 from zipfile import ZipFile
 from pathlib import Path
+
+import numpy as np
+import matplotlib.pyplot as plt
 
 import torch
 from torch.utils.data import DataLoader
@@ -11,6 +15,27 @@ from torchvision import datasets, transforms
 import multiprocessing
 
 from tqdm import tqdm
+
+
+def setup_env(url, directory= 'data'):
+    if torch.cuda.is_available():
+        print('GPU available!')
+    else:
+        print('GPU *NOT* available. Will use CPU (slow computation)')
+
+    # Seed random generators
+    seed = 0
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+    download_and_extract_data(url, directory)
+    compute_mean_and_std(directory + '/train', batch_size= 64)
+
+    # Make `checkpoints` subdir if not existing:
+    os.makedirs('checkpoints', exist_ok= True)
+
 
 def download_and_extract_data(url, directory):
     try:
@@ -92,5 +117,4 @@ def compute_mean_and_std(data_loc, batch_size= 64):
     torch.save({'mean': mean, 'std': std}, cache_file)
 
     return mean, std
-
 
