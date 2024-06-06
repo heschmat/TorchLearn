@@ -3,6 +3,10 @@ import torch.nn as nn
 
 from tqdm import tqdm
 
+from livelossplot import PlotLosses
+from livelossplot.outputs import MatplotlibPlot
+
+
 def train_one_epoch(trn_dataloader, model, optimizer, criterion):
     """
     Performs one training epoch.
@@ -63,3 +67,35 @@ def valid_one_epoch(val_dataloader, model, criterion):
         return val_loss
 
 
+def optimize(data_loaders, model, optimizer, criterion, n_epochs,
+             model_savepath,
+             interactive_tracking= False):
+    liveloss = None
+    if interactive_tracking:
+        #@TODO Add `after_subplots()` in the `helper` module
+        liveloss = PlotLosses(outputs=[MatplotlibPlot(after_subplot= after_subplot)])
+
+    val_loss_min = None
+    logs = {}
+
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience= 3)
+    for epoch in range(1, n_epochs + 1):
+        trn_loss = train_one_epoch(data_loaders['train'], model, optimizer, criterion)
+        val_loss = valid_one_epoch(data_loaders['valid'], model, criterion)
+
+        print(f'Epoch [{epoch}/{n_epochs}] => Train Loss: {trn_loss:.4f} -- Valid Loss: {val_loss:.4f}')
+
+    if val_loss_min is None or (val_loss_min - val_loss) > (.01 * val_loss_min):
+        val_loss_min = val_loss
+        print(f'New min validation loss: {val_loss_min:.4f}. Saving model ...')
+        torch.save(model.state_dict(), model_savepath)
+
+    scheduler.step()
+
+    if interactive_tracking:
+        logs['loss'] = trn_loss
+        logs['val_loss'] = val_loss
+        logs['lr'] = optimizer.param_groups[0]['lr']
+
+        liveloss.update(logs)
+        liveloss.send()
